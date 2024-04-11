@@ -6,19 +6,30 @@ import (
 	"github.com/nsf/termbox-go"
 )
 
+const EDITOR_START_X = 2
+
 type TextEditor struct {
-	Text          string
-	CursorXOffset int
-	CursorYOffset int
-	cellGrid      [][]rune
+	Text                string
+	CursorXOffset       int
+	CursorXOffsetActual int
+	CursorYOffset       int
+	cellGrid            [][]rune
 }
 
 func InitTextEditor(text string) *TextEditor {
-	return &TextEditor{Text: text, CursorXOffset: 2, CursorYOffset: 0}
+	return &TextEditor{Text: text, CursorXOffset: 2, CursorYOffset: 0, CursorXOffsetActual: 2}
 }
 
 func (te *TextEditor) drawChar(x, y int, c rune) {
 	termbox.SetCell(x, y, c, termbox.ColorRed, termbox.ColorDefault)
+}
+
+func (te *TextEditor) height() int {
+	return len(te.cellGrid)
+}
+
+func (te *TextEditor) width(row int) int {
+	return len(te.cellGrid[row])
 }
 
 func (te *TextEditor) Draw() {
@@ -63,13 +74,37 @@ func (te *TextEditor) Draw() {
 }
 
 func (te *TextEditor) MoveCursorTo(x, y int) {
-	w, h := termbox.Size()
-	if 2 > x || 0 > y || w < x || h < y {
+	// TODO: test limits: edge of editor
+	if EDITOR_START_X > x {
 		return
 	}
-	if len(te.cellGrid) <= y || len(te.cellGrid[y]) < x {
+
+	if te.height() <= y {
+		y = te.height() - 1
+		x = te.width(y)
+		te.CursorXOffset, te.CursorYOffset = x, y
 		return
 	}
+
+	if 0 > y {
+		y = 0
+		x = EDITOR_START_X
+		te.CursorXOffset, te.CursorYOffset = x, y
+		return
+	}
+
+	if y != te.CursorYOffset {
+		x = te.CursorXOffsetActual
+		if te.width(y) < x {
+			x = te.width(y)
+		}
+	} else if x != te.CursorXOffset {
+		if te.width(y) < x {
+			return
+		}
+		te.CursorXOffsetActual = x
+	}
+
 	te.CursorXOffset, te.CursorYOffset = x, y
 }
 
@@ -87,4 +122,13 @@ func (te *TextEditor) MoveCursorUp() {
 
 func (te *TextEditor) MoveCursorDown() {
 	te.MoveCursorTo(te.CursorXOffset, te.CursorYOffset+1)
+}
+
+func (te *TextEditor) MoveCursorToEndOfTheLine() {
+	x := te.width(te.CursorYOffset)
+	te.MoveCursorTo(x, te.CursorYOffset)
+}
+
+func (te *TextEditor) MoveCursorToBeginningOfTheLine() {
+	te.MoveCursorTo(EDITOR_START_X, te.CursorYOffset)
 }

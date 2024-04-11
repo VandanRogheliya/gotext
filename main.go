@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"os"
 
 	"github.com/nsf/termbox-go"
@@ -15,6 +16,12 @@ func main() {
 		os.Exit(1)
 	}
 	defer termbox.Close()
+	f, err := os.OpenFile("testlogfile", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
+	if err != nil {
+		log.Fatalf("error opening file: %v", err)
+	}
+	defer f.Close()
+	log.SetOutput(f)
 
 	termbox.SetInputMode(termbox.InputEsc)
 
@@ -40,6 +47,12 @@ mainLoop:
 				textEditor.Draw()
 			case termbox.KeyArrowDown:
 				textEditor.MoveCursorDown()
+				textEditor.Draw()
+			case termbox.KeyCtrlL:
+				textEditor.MoveCursorToEndOfTheLine()
+				textEditor.Draw()
+			case termbox.KeyCtrlH:
+				textEditor.MoveCursorToBeginningOfTheLine()
 				textEditor.Draw()
 			}
 		case termbox.EventError:
