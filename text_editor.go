@@ -21,7 +21,14 @@ func InitTextEditor(text string) *TextEditor {
 }
 
 func (te *TextEditor) drawChar(x, y int, c rune) {
-	termbox.SetCell(x, y, c, termbox.ColorRed, termbox.ColorDefault)
+	color := termbox.ColorWhite
+	if x < EDITOR_START_X {
+		color = termbox.ColorGreen
+	}
+	if c == '~' {
+		color = termbox.ColorCyan
+	}
+	termbox.SetCell(x, y, c, color, termbox.ColorDefault)
 }
 
 func (te *TextEditor) height() int {
@@ -33,38 +40,38 @@ func (te *TextEditor) width(row int) int {
 }
 
 func (te *TextEditor) Draw() {
-	w, h := termbox.Size()
-
-	var newCellGrid [][]rune
-
-	newCellGrid = append(newCellGrid, []rune{'1', ' '})
+	_, h := termbox.Size()
+	te.cellGrid = [][]rune{}
+	te.cellGrid = append(te.cellGrid, []rune{'1', ' '})
 
 	for _, c := range te.Text {
-		lastRowIndex := len(newCellGrid) - 1
-		if len(newCellGrid[lastRowIndex]) == w || c == '\n' {
+		lastRowIndex := len(te.cellGrid) - 1
+		if c == '\n' {
 			var row []rune
-			row = append(row, rune(strconv.Itoa(len(newCellGrid) + 1)[0]))
+			row = append(row, rune(strconv.Itoa(len(te.cellGrid) + 1)[0]))
 			row = append(row, ' ')
-			newCellGrid = append(newCellGrid, row)
+			te.cellGrid = append(te.cellGrid, row)
 			if c == '\n' {
 				continue
 			}
 		}
-		lastRowIndex = len(newCellGrid) - 1
-		newCellGrid[lastRowIndex] = append(newCellGrid[lastRowIndex], c)
+		lastRowIndex = len(te.cellGrid) - 1
+		te.cellGrid[lastRowIndex] = append(te.cellGrid[lastRowIndex], c)
 	}
 
-	if len(newCellGrid) > h {
+	if te.height() > h {
 		panic("Text will overflow. Height of terminal isnt enough")
 	}
 
-	for y, row := range newCellGrid {
+	for y, row := range te.cellGrid {
 		for x, c := range row {
 			te.drawChar(x, y, c)
 		}
 	}
 
-	te.cellGrid = newCellGrid
+	for i := te.height(); i <= h; i++ {
+		te.drawChar(0, i, '~')
+	}
 
 	termbox.SetCursor(te.CursorXOffset, te.CursorYOffset)
 	err := termbox.Flush()
