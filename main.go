@@ -25,7 +25,7 @@ func main() {
 
 	termbox.SetInputMode(termbox.InputEsc)
 
-	textEditor := InitTextEditor("Hello world! Hello world! Hello world! Hello world! Hello world! Hello world! Hello world!\nHello world!\n Hello world! Hello world! Hello world! Hello world! Hello world! Hello world! Hello world! Hello world! Hello world! Hello world! Hello world! Hello world!")
+	textEditor := InitTextEditor("Voluptate nostrud aliqua cupidatat amet\nLorem nulla laborum id dolore\nreprehenderit eu consectetur tempor aliquip.")
 	textEditor.Draw()
 
 mainLoop:
@@ -38,27 +38,28 @@ mainLoop:
 				break mainLoop
 			case termbox.KeyArrowRight:
 				textEditor.MoveCursorRight()
-				textEditor.Draw()
 			case termbox.KeyArrowLeft:
 				textEditor.MoveCursorLeft()
-				textEditor.Draw()
 			case termbox.KeyArrowUp:
 				textEditor.MoveCursorUp()
-				textEditor.Draw()
 			case termbox.KeyArrowDown:
 				textEditor.MoveCursorDown()
-				textEditor.Draw()
 			case termbox.KeyCtrlL:
 				textEditor.MoveCursorToEndOfTheLine()
-				textEditor.Draw()
 			case termbox.KeyCtrlH:
 				textEditor.MoveCursorToBeginningOfTheLine()
-				textEditor.Draw()
+			case termbox.KeySpace:
+				textEditor.InsertChar(' ')
+			case termbox.KeyBackspace2:
+				textEditor.RemoveChar()
+			default:
+				if ev.Ch != 0 {
+					textEditor.InsertChar(ev.Ch)
+				}
 			}
 		case termbox.EventError:
 			panic(ev.Err)
 		}
 	}
 
-	// time.Sleep(time.Second)
 }
