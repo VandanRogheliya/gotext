@@ -25,7 +25,7 @@ func main() {
 
 	termbox.SetInputMode(termbox.InputEsc)
 
-	textEditor := InitTextEditor("Voluptate nostrud aliqua cupidatat amet\nLorem nulla laborum id dolore\nreprehenderit eu consectetur tempor aliquip.")
+	textEditor := InitTextEditor("Voluptate nostrud aliqua cupidatat amet\nLorem nulla laborum id dolore\nreprehenderit eu consectetur tempor aliquip.", "my-file.txt")
 	textEditor.Draw()
 
 mainLoop:
@@ -50,6 +50,8 @@ mainLoop:
 				textEditor.MoveCursorToBeginningOfTheLine()
 			case termbox.KeySpace:
 				textEditor.InsertChar(' ')
+			case termbox.KeyEnter:
+				textEditor.AddNewLine()
 			case termbox.KeyBackspace2:
 				textEditor.RemoveChar()
 			default:

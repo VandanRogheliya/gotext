@@ -1,34 +1,37 @@
 package main
 
 import (
-	"strconv"
+	"fmt"
+	"log"
 
 	"github.com/nsf/termbox-go"
 )
 
-const EDITOR_START_X = 2
+const EDITOR_START_X = 0
 
 type TextEditor struct {
 	Text                string
+	FileName            string
 	CursorXOffset       int
 	CursorXOffsetActual int
 	CursorYOffset       int
 	cellGrid            [][]rune
+	scrollX             int
+	scrollY             int
 }
 
-func InitTextEditor(text string) *TextEditor {
-	return &TextEditor{Text: text, CursorXOffset: 2, CursorYOffset: 0, CursorXOffsetActual: 2}
+func InitTextEditor(text string, fileName string) *TextEditor {
+	return &TextEditor{
+		Text:                text,
+		CursorXOffset:       EDITOR_START_X,
+		CursorYOffset:       0,
+		CursorXOffsetActual: EDITOR_START_X,
+		FileName:            fileName,
+	}
 }
 
-func (te *TextEditor) drawChar(x, y int, c rune) {
-	color := termbox.ColorWhite
-	if x < EDITOR_START_X {
-		color = termbox.ColorGreen
-	}
-	if c == '~' {
-		color = termbox.ColorCyan
-	}
-	termbox.SetCell(x, y, c, color, termbox.ColorDefault)
+func (te *TextEditor) drawChar(x, y int, c rune, fgColor termbox.Attribute, bgColor termbox.Attribute) {
+	termbox.SetCell(x, y, c, fgColor, bgColor)
 }
 
 func (te *TextEditor) clearEditor() {
@@ -53,18 +56,29 @@ func (te *TextEditor) getTextIndex() int {
 	return textIndex
 }
 
+func (te *TextEditor) drawBottomInfoStrip() {
+	infoText := fmt.Sprintf("%d,%d | %s", te.CursorXOffset, te.CursorYOffset, te.FileName)
+	termboxWidth, termboxHeight := termbox.Size()
+
+	for i := 0; i < termboxWidth; i++ {
+		if i >= len(infoText) {
+			te.drawChar(i, termboxHeight-1, ' ', termbox.ColorWhite, termbox.ColorWhite)
+			continue
+		}
+		te.drawChar(i, termboxHeight-1, rune(infoText[i]), termbox.ColorDefault, termbox.ColorWhite)
+	}
+}
+
 func (te *TextEditor) Draw() {
 	te.clearEditor()
 	_, h := termbox.Size()
 	te.cellGrid = [][]rune{}
-	te.cellGrid = append(te.cellGrid, []rune{'1', ' '})
+	te.cellGrid = append(te.cellGrid, []rune{})
 
 	for _, c := range te.Text {
 		lastRowIndex := len(te.cellGrid) - 1
 		if c == '\n' {
 			var row []rune
-			row = append(row, rune(strconv.Itoa(len(te.cellGrid) + 1)[0]))
-			row = append(row, ' ')
 			te.cellGrid = append(te.cellGrid, row)
 			if c == '\n' {
 				continue
@@ -80,14 +94,14 @@ func (te *TextEditor) Draw() {
 
 	for y, row := range te.cellGrid {
 		for x, c := range row {
-			te.drawChar(x, y, c)
+			te.drawChar(x, y, c, termbox.ColorWhite, termbox.ColorDefault)
 		}
 	}
 
 	for i := te.height(); i <= h; i++ {
-		te.drawChar(0, i, '~')
+		te.drawChar(0, i, '~', termbox.ColorCyan, termbox.ColorDefault)
 	}
-
+	te.drawBottomInfoStrip()
 	termbox.SetCursor(te.CursorXOffset, te.CursorYOffset)
 	err := termbox.Flush()
 	if err != nil {
@@ -166,19 +180,34 @@ func (te *TextEditor) InsertChar(c rune) {
 	runeSlice := []rune(te.Text)
 	runeSlice = append(runeSlice[:textIndex], append([]rune{c}, runeSlice[textIndex:]...)...)
 	te.Text = string(runeSlice)
+	te.Draw()
 	te.MoveCursorRight()
+}
+
+func (te *TextEditor) AddNewLine() {
+	textIndex := te.getTextIndex()
+	runeSlice := []rune(te.Text)
+	runeSlice = append(runeSlice[:textIndex], append([]rune{'\n'}, runeSlice[textIndex:]...)...)
+	te.Text = string(runeSlice)
+	te.MoveCursorToBeginningOfTheLine()
+	te.MoveCursorDown()
 	te.Draw()
 }
 
 func (te *TextEditor) RemoveChar() {
-	// TODO: handle deleting new line characters
-	if te.CursorXOffset == EDITOR_START_X {
+	if te.CursorXOffset == EDITOR_START_X && te.CursorYOffset == 0 {
 		return
 	}
 	textIndex := te.getTextIndex() - 1
+	log.Printf("Deleting: %c", (te.Text[textIndex]))
 	runeSlice := []rune(te.Text)
 	runeSlice = append(runeSlice[:textIndex], runeSlice[textIndex+1:]...)
+	if te.CursorXOffset == EDITOR_START_X {
+		te.MoveCursorUp()
+		te.MoveCursorToEndOfTheLine()
+	} else {
+		te.MoveCursorLeft()
+	}
 	te.Text = string(runeSlice)
-	te.MoveCursorLeft()
 	te.Draw()
 }
