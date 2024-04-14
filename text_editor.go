@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"log"
 	"math"
 
 	"github.com/nsf/termbox-go"
@@ -19,6 +18,7 @@ type TextEditor struct {
 	CursorYOffset       int
 	cellGrid            [][]rune
 	scrollY             int
+	newLines            map[int]struct{}
 }
 
 func InitTextEditor(text string, fileName string) *TextEditor {
@@ -51,7 +51,11 @@ func (te *TextEditor) width(row int) int {
 func (te *TextEditor) getTextIndex() int {
 	totalChars := 0
 	for i := 0; i < te.CursorYOffset; i++ {
-		totalChars += len(te.cellGrid[i]) - EDITOR_START_X + 1 // +1 for '\n' char
+
+		totalChars += len(te.cellGrid[i]) - EDITOR_START_X
+		if _, ok := te.newLines[i]; ok {
+			totalChars++
+		}
 	}
 	totalChars += te.CursorXOffset - EDITOR_START_X
 	textIndex := totalChars
@@ -97,16 +101,18 @@ func (te *TextEditor) setCursorAndScroll() {
 
 func (te *TextEditor) Draw() {
 	te.clearEditor()
-	_, h := termbox.Size()
+	w, h := termbox.Size()
 	te.cellGrid = [][]rune{}
+	te.newLines = make(map[int]struct{})
 	te.cellGrid = append(te.cellGrid, []rune{})
 
 	for _, c := range te.Text {
 		lastRowIndex := len(te.cellGrid) - 1
-		if c == '\n' {
+		if c == '\n' || len(te.cellGrid[lastRowIndex]) >= w-1 {
 			var row []rune
 			te.cellGrid = append(te.cellGrid, row)
 			if c == '\n' {
+				te.newLines[lastRowIndex] = struct{}{}
 				continue
 			}
 		}
@@ -135,8 +141,10 @@ func (te *TextEditor) Draw() {
 }
 
 func (te *TextEditor) MoveCursorTo(x, y int) {
-	// TODO: test limits: edge of editor
 	if EDITOR_START_X > x {
+		te.MoveCursorUp()
+		te.MoveCursorToEndOfTheLine()
+		te.MoveCursorLeft()
 		return
 	}
 
@@ -161,6 +169,9 @@ func (te *TextEditor) MoveCursorTo(x, y int) {
 		}
 	} else if x != te.CursorXOffset {
 		if te.width(y) < x {
+			te.MoveCursorDown()
+			te.MoveCursorToBeginningOfTheLine()
+			te.MoveCursorRight()
 			return
 		}
 		te.CursorXOffsetActual = x
@@ -206,7 +217,13 @@ func (te *TextEditor) InsertChar(c rune) {
 	runeSlice = append(runeSlice[:textIndex], append([]rune{c}, runeSlice[textIndex:]...)...)
 	te.Text = string(runeSlice)
 	te.Draw()
-	te.MoveCursorRight()
+	w, _ := termbox.Size()
+	if te.CursorXOffset == w-1 {
+		te.MoveCursorDown()
+		te.MoveCursorToEndOfTheLine()
+	} else {
+		te.MoveCursorRight()
+	}
 }
 
 func (te *TextEditor) AddNewLine() {
@@ -224,12 +241,14 @@ func (te *TextEditor) RemoveChar() {
 		return
 	}
 	textIndex := te.getTextIndex() - 1
-	log.Printf("Deleting: %c", (te.Text[textIndex]))
 	runeSlice := []rune(te.Text)
 	runeSlice = append(runeSlice[:textIndex], runeSlice[textIndex+1:]...)
 	if te.CursorXOffset == EDITOR_START_X {
 		te.MoveCursorUp()
 		te.MoveCursorToEndOfTheLine()
+		if _, ok := te.newLines[te.CursorYOffset]; !ok {
+			te.MoveCursorLeft()
+		}
 	} else {
 		te.MoveCursorLeft()
 	}

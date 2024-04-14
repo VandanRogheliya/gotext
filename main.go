@@ -25,7 +25,7 @@ func main() {
 
 	termbox.SetInputMode(termbox.InputEsc)
 
-	textEditor := InitTextEditor("Voluptate nostrud aliqua cupidatat amet\nLorem nulla laborum id dolore\nreprehenderit eu consectetur tempor aliquip.", "my-file.txt")
+	textEditor := InitTextEditor("Voluptate nostrud aliqua cupidatat amet Lorem nulla laborum id dolore reprehenderit eu consectetur tempor aliquip. Aliquip non anim commodo nisi. Ut culpa aute ex deserunt id consequat aliqua amet labore proident ex. Ad ex aliqua in ullamco. Voluptate ullamco deserunt cupidatat minim veniam aute magna adipisicing occaecat duis. Ullamco adipisicing nisi occaecat qui.", "my-file.txt")
 	textEditor.Draw()
 
 mainLoop:
