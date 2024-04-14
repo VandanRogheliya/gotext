@@ -3,11 +3,13 @@ package main
 import (
 	"fmt"
 	"log"
+	"math"
 
 	"github.com/nsf/termbox-go"
 )
 
 const EDITOR_START_X = 0
+const EDITOR_START_Y = 0
 
 type TextEditor struct {
 	Text                string
@@ -16,7 +18,6 @@ type TextEditor struct {
 	CursorXOffsetActual int
 	CursorYOffset       int
 	cellGrid            [][]rune
-	scrollX             int
 	scrollY             int
 }
 
@@ -24,9 +25,10 @@ func InitTextEditor(text string, fileName string) *TextEditor {
 	return &TextEditor{
 		Text:                text,
 		CursorXOffset:       EDITOR_START_X,
-		CursorYOffset:       0,
+		CursorYOffset:       EDITOR_START_Y,
 		CursorXOffsetActual: EDITOR_START_X,
 		FileName:            fileName,
+		scrollY:             EDITOR_START_Y,
 	}
 }
 
@@ -69,6 +71,30 @@ func (te *TextEditor) drawBottomInfoStrip() {
 	}
 }
 
+func (te *TextEditor) getMaxVisibleContentHeight() int {
+	_, h := termbox.Size()
+	return h - 1 // -1 for info strip
+}
+
+func (te *TextEditor) getVisibleCellGrid() [][]rune {
+	firstVisibleRow := te.scrollY
+	lastVisibleRow := te.scrollY + te.getMaxVisibleContentHeight()
+	lastVisibleRow = int(math.Min(float64(lastVisibleRow), float64(len(te.cellGrid))))
+	return te.cellGrid[firstVisibleRow:lastVisibleRow]
+
+}
+
+func (te *TextEditor) setCursorAndScroll() {
+	minY := te.scrollY
+	maxY := te.scrollY + te.getMaxVisibleContentHeight()
+	if minY > te.CursorYOffset {
+		te.scrollY = te.CursorYOffset
+	} else if maxY <= te.CursorYOffset {
+		te.scrollY += (te.CursorYOffset - maxY + 1)
+	}
+	termbox.SetCursor(te.CursorXOffset, te.CursorYOffset-te.scrollY)
+}
+
 func (te *TextEditor) Draw() {
 	te.clearEditor()
 	_, h := termbox.Size()
@@ -88,21 +114,20 @@ func (te *TextEditor) Draw() {
 		te.cellGrid[lastRowIndex] = append(te.cellGrid[lastRowIndex], c)
 	}
 
-	if te.height() > h {
-		panic("Text will overflow. Height of terminal isnt enough")
-	}
+	te.setCursorAndScroll()
 
-	for y, row := range te.cellGrid {
+	visibleCellGrid := te.getVisibleCellGrid()
+
+	for y, row := range visibleCellGrid {
 		for x, c := range row {
 			te.drawChar(x, y, c, termbox.ColorWhite, termbox.ColorDefault)
 		}
 	}
 
-	for i := te.height(); i <= h; i++ {
+	for i := te.height() - te.scrollY; i <= h; i++ {
 		te.drawChar(0, i, '~', termbox.ColorCyan, termbox.ColorDefault)
 	}
 	te.drawBottomInfoStrip()
-	termbox.SetCursor(te.CursorXOffset, te.CursorYOffset)
 	err := termbox.Flush()
 	if err != nil {
 		panic(err)
@@ -195,7 +220,7 @@ func (te *TextEditor) AddNewLine() {
 }
 
 func (te *TextEditor) RemoveChar() {
-	if te.CursorXOffset == EDITOR_START_X && te.CursorYOffset == 0 {
+	if te.CursorXOffset == EDITOR_START_X && te.CursorYOffset == EDITOR_START_Y {
 		return
 	}
 	textIndex := te.getTextIndex() - 1
