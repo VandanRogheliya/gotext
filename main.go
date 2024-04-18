@@ -54,15 +54,17 @@ mainLoop:
 				textEditor.CopySelection()
 			case termbox.KeyCtrlX:
 				textEditor.CutSelection()
+			case termbox.KeyCtrlV:
+				textEditor.Paste()
 			case termbox.KeySpace:
-				textEditor.InsertChar(' ')
+				textEditor.InsertString(" ")
 			case termbox.KeyEnter:
 				textEditor.AddNewLine()
 			case termbox.KeyBackspace2:
 				textEditor.RemoveChar()
 			default:
 				if ev.Ch != 0 {
-					textEditor.InsertChar(ev.Ch)
+					textEditor.InsertString(string(ev.Ch))
 				}
 			}
 		case termbox.EventError:

@@ -290,10 +290,13 @@ func (te *TextEditor) MoveCursorToBeginningOfTheLine() {
 	te.Draw()
 }
 
-func (te *TextEditor) InsertChar(c rune) {
+func (te *TextEditor) InsertString(text string) {
+	if te.isSelection {
+		te.RemoveSelection()
+	}
 	textIndex := te.getTextIndex(te.CursorXOffset, te.CursorYOffset)
 	runeSlice := []rune(te.Text)
-	runeSlice = append(runeSlice[:textIndex], append([]rune{c}, runeSlice[textIndex:]...)...)
+	runeSlice = append(runeSlice[:textIndex], append([]rune(text), runeSlice[textIndex:]...)...)
 	te.Text = string(runeSlice)
 	te.Draw()
 	w, _ := termbox.Size()
@@ -306,6 +309,7 @@ func (te *TextEditor) InsertChar(c rune) {
 }
 
 func (te *TextEditor) AddNewLine() {
+	te.RemoveSelection()
 	textIndex := te.getTextIndex(te.CursorXOffset, te.CursorYOffset)
 	runeSlice := []rune(te.Text)
 	runeSlice = append(runeSlice[:textIndex], append([]rune{'\n'}, runeSlice[textIndex:]...)...)
@@ -366,8 +370,8 @@ func (te *TextEditor) RemoveSelection() {
 	startIndex, endIndex := te.getSelectedTextIndexRange()
 	runeSlice := []rune(te.Text)
 	runeSlice = append(runeSlice[:startIndex], runeSlice[endIndex:]...)
-	startX, endX, _, _ := te.getSelectionRange()
-	te.MoveCursorTo(startX, endX)
+	startX, startY, _, _ := te.getSelectionRange()
+	te.MoveCursorTo(startX, startY)
 	te.Text = string(runeSlice)
 	te.ToggleSelectionMode()
 	te.Draw()
@@ -385,10 +389,10 @@ func (te *TextEditor) CutSelection() {
 	te.RemoveSelection()
 }
 
-/* TODO: add following for selection
-1. Copy [x]
-2. Cut
-3. Paste
-4. Delete
-5. Overwrite with one character
-*/
+func (te *TextEditor) Paste() {
+	text, err := clipboard.ReadAll()
+	if err != nil {
+		log.Fatalf(err.Error())
+	}
+	te.InsertString(text)
+}
