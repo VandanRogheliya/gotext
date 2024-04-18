@@ -2,13 +2,20 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"math"
 
+	"github.com/atotto/clipboard"
 	"github.com/nsf/termbox-go"
 )
 
 const EDITOR_START_X = 0
 const EDITOR_START_Y = 0
+
+type selection struct {
+	StartX int
+	StartY int
+}
 
 type TextEditor struct {
 	Text                string
@@ -19,6 +26,8 @@ type TextEditor struct {
 	cellGrid            [][]rune
 	scrollY             int
 	newLines            map[int]struct{}
+	Selection           selection
+	isSelection         bool
 }
 
 func InitTextEditor(text string, fileName string) *TextEditor {
@@ -29,7 +38,51 @@ func InitTextEditor(text string, fileName string) *TextEditor {
 		CursorXOffsetActual: EDITOR_START_X,
 		FileName:            fileName,
 		scrollY:             EDITOR_START_Y,
+		isSelection:         false,
 	}
+}
+
+func (te *TextEditor) getSelectionRange() (startX int, startY int, endX int, endY int) {
+	startY = int(math.Min(float64(te.CursorYOffset), float64(te.Selection.StartY)))
+	endY = int(math.Max(float64(te.CursorYOffset), float64(te.Selection.StartY)))
+
+	if startY == endY {
+		startX = int(math.Min(float64(te.CursorXOffset), float64(te.Selection.StartX)))
+		endX = int(math.Max(float64(te.CursorXOffset), float64(te.Selection.StartX)))
+	} else {
+		if startY == te.Selection.StartY {
+			startX = te.Selection.StartX
+			endX = te.CursorXOffset
+		} else {
+			startX = te.CursorXOffset
+			endX = te.Selection.StartX
+
+		}
+	}
+
+	return startX, startY, endX, endY
+}
+
+func (te *TextEditor) checkIsCharSelected(x, y int) bool {
+	if !te.isSelection {
+		return false
+	}
+
+	startX, startY, endX, endY := te.getSelectionRange()
+
+	if y < startY || y > endY {
+		return false
+	}
+
+	if startY == endY {
+		return startX <= x && x <= endX
+	} else if y == startY {
+		return startX <= x
+	} else if y == endY {
+		return x <= endX
+	}
+
+	return true
 }
 
 func (te *TextEditor) drawChar(x, y int, c rune, fgColor termbox.Attribute, bgColor termbox.Attribute) {
@@ -48,22 +101,22 @@ func (te *TextEditor) width(row int) int {
 	return len(te.cellGrid[row])
 }
 
-func (te *TextEditor) getTextIndex() int {
+func (te *TextEditor) getTextIndex(x, y int) int {
 	totalChars := 0
-	for i := 0; i < te.CursorYOffset; i++ {
+	for i := 0; i < y; i++ {
 
 		totalChars += len(te.cellGrid[i]) - EDITOR_START_X
 		if _, ok := te.newLines[i]; ok {
 			totalChars++
 		}
 	}
-	totalChars += te.CursorXOffset - EDITOR_START_X
+	totalChars += x - EDITOR_START_X
 	textIndex := totalChars
 	return textIndex
 }
 
 func (te *TextEditor) drawBottomInfoStrip() {
-	infoText := fmt.Sprintf("%d,%d | %s", te.CursorXOffset, te.CursorYOffset, te.FileName)
+	infoText := fmt.Sprintf("%d,%d | %s | Selection (Ctrl+Q): %t", te.CursorXOffset, te.CursorYOffset, te.FileName, te.isSelection)
 	termboxWidth, termboxHeight := termbox.Size()
 
 	for i := 0; i < termboxWidth; i++ {
@@ -99,6 +152,19 @@ func (te *TextEditor) setCursorAndScroll() {
 	termbox.SetCursor(te.CursorXOffset, te.CursorYOffset-te.scrollY)
 }
 
+func (te *TextEditor) getSelectedTextIndexRange() (startIndex int, endIndex int) {
+	startX, startY, endX, endY := te.getSelectionRange()
+
+	startIndex = te.getTextIndex(startX, startY)
+	endIndex = te.getTextIndex(endX, endY)
+	return startIndex, endIndex
+}
+
+func (te *TextEditor) getSelectedText() string {
+	startIndex, endIndex := te.getSelectedTextIndexRange()
+	return te.Text[startIndex:endIndex]
+}
+
 func (te *TextEditor) Draw() {
 	te.clearEditor()
 	w, h := termbox.Size()
@@ -126,7 +192,14 @@ func (te *TextEditor) Draw() {
 
 	for y, row := range visibleCellGrid {
 		for x, c := range row {
-			te.drawChar(x, y, c, termbox.ColorWhite, termbox.ColorDefault)
+			isSelected := te.checkIsCharSelected(x, y)
+			fg := termbox.ColorWhite
+			bg := termbox.ColorDefault
+			if isSelected {
+				fg = termbox.ColorBlack
+				bg = termbox.ColorWhite
+			}
+			te.drawChar(x, y, c, fg, bg)
 		}
 	}
 
@@ -142,6 +215,9 @@ func (te *TextEditor) Draw() {
 
 func (te *TextEditor) MoveCursorTo(x, y int) {
 	if EDITOR_START_X > x {
+		if y == EDITOR_START_Y {
+			return
+		}
 		te.MoveCursorUp()
 		te.MoveCursorToEndOfTheLine()
 		te.MoveCursorLeft()
@@ -169,6 +245,9 @@ func (te *TextEditor) MoveCursorTo(x, y int) {
 		}
 	} else if x != te.CursorXOffset {
 		if te.width(y) < x {
+			if y == te.height()-1 {
+				return
+			}
 			te.MoveCursorDown()
 			te.MoveCursorToBeginningOfTheLine()
 			te.MoveCursorRight()
@@ -212,7 +291,7 @@ func (te *TextEditor) MoveCursorToBeginningOfTheLine() {
 }
 
 func (te *TextEditor) InsertChar(c rune) {
-	textIndex := te.getTextIndex()
+	textIndex := te.getTextIndex(te.CursorXOffset, te.CursorYOffset)
 	runeSlice := []rune(te.Text)
 	runeSlice = append(runeSlice[:textIndex], append([]rune{c}, runeSlice[textIndex:]...)...)
 	te.Text = string(runeSlice)
@@ -227,7 +306,7 @@ func (te *TextEditor) InsertChar(c rune) {
 }
 
 func (te *TextEditor) AddNewLine() {
-	textIndex := te.getTextIndex()
+	textIndex := te.getTextIndex(te.CursorXOffset, te.CursorYOffset)
 	runeSlice := []rune(te.Text)
 	runeSlice = append(runeSlice[:textIndex], append([]rune{'\n'}, runeSlice[textIndex:]...)...)
 	te.Text = string(runeSlice)
@@ -237,10 +316,14 @@ func (te *TextEditor) AddNewLine() {
 }
 
 func (te *TextEditor) RemoveChar() {
+	if te.isSelection {
+		te.RemoveSelection()
+		return
+	}
 	if te.CursorXOffset == EDITOR_START_X && te.CursorYOffset == EDITOR_START_Y {
 		return
 	}
-	textIndex := te.getTextIndex() - 1
+	textIndex := te.getTextIndex(te.CursorXOffset, te.CursorYOffset) - 1
 	runeSlice := []rune(te.Text)
 	runeSlice = append(runeSlice[:textIndex], runeSlice[textIndex+1:]...)
 	if te.CursorXOffset == EDITOR_START_X {
@@ -255,3 +338,57 @@ func (te *TextEditor) RemoveChar() {
 	te.Text = string(runeSlice)
 	te.Draw()
 }
+
+func (te *TextEditor) ToggleSelectionMode() {
+	te.isSelection = !te.isSelection
+	if te.isSelection {
+		te.Selection.StartX = te.CursorXOffset
+		te.Selection.StartY = te.CursorYOffset
+	}
+	te.Draw()
+}
+
+func (te *TextEditor) CopySelection() {
+	if !te.isSelection {
+		return
+	}
+	selectedText := te.getSelectedText()
+	err := clipboard.WriteAll(selectedText)
+	if err != nil {
+		log.Fatalf(err.Error())
+	}
+}
+
+func (te *TextEditor) RemoveSelection() {
+	if !te.isSelection {
+		return
+	}
+	startIndex, endIndex := te.getSelectedTextIndexRange()
+	runeSlice := []rune(te.Text)
+	runeSlice = append(runeSlice[:startIndex], runeSlice[endIndex:]...)
+	startX, endX, _, _ := te.getSelectionRange()
+	te.MoveCursorTo(startX, endX)
+	te.Text = string(runeSlice)
+	te.ToggleSelectionMode()
+	te.Draw()
+}
+
+func (te *TextEditor) CutSelection() {
+	if !te.isSelection {
+		return
+	}
+	selectedText := te.getSelectedText()
+	err := clipboard.WriteAll(selectedText)
+	if err != nil {
+		log.Fatalf(err.Error())
+	}
+	te.RemoveSelection()
+}
+
+/* TODO: add following for selection
+1. Copy [x]
+2. Cut
+3. Paste
+4. Delete
+5. Overwrite with one character
+*/

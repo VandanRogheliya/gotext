@@ -48,6 +48,12 @@ mainLoop:
 				textEditor.MoveCursorToEndOfTheLine()
 			case termbox.KeyCtrlH:
 				textEditor.MoveCursorToBeginningOfTheLine()
+			case termbox.KeyCtrlQ:
+				textEditor.ToggleSelectionMode()
+			case termbox.KeyCtrlC:
+				textEditor.CopySelection()
+			case termbox.KeyCtrlX:
+				textEditor.CutSelection()
 			case termbox.KeySpace:
 				textEditor.InsertChar(' ')
 			case termbox.KeyEnter:
