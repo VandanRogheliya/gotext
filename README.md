@@ -37,7 +37,7 @@ To develop this project, you need to have Go installed on your machine. If you d
 Once you have Go installed, clone this repository to your local machine:
 
 ```bash
-git clone https://github.com/vandanrogheliya/gotext.git
+git clone https://github.com/VandanRogheliya/gotext.git
 ```
 
 ### Build
