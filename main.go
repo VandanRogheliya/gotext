@@ -58,6 +58,8 @@ mainLoop:
 				textEditor.Paste()
 			case termbox.KeyCtrlZ:
 				textEditor.Undo()
+			case termbox.KeyCtrlR:
+				textEditor.Redo()
 			case termbox.KeySpace:
 				textEditor.InsertString(" ")
 			case termbox.KeyEnter:

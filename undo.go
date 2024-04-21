@@ -65,7 +65,7 @@ func (utr *UndoRedoTree) Undo() *Operation {
 }
 
 func (utr *UndoRedoTree) Redo() *Operation {
-	if utr.Head.UndoOriginChild == nil {
+	if utr == nil || utr.Head == nil || utr.Head.UndoOriginChild == nil {
 		return nil
 	}
 

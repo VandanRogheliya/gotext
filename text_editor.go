@@ -469,3 +469,29 @@ func (te *TextEditor) Undo() {
 		te.Draw()
 	}
 }
+
+func (te *TextEditor) Redo() {
+	op := te.undoRedoTree.Redo()
+	if op == nil {
+		return
+	}
+
+	if op.Operation == Remove {
+		runeSlice := []rune(te.Text)
+		startIndex := op.StartIndex
+		endIndex := startIndex + len(op.Text)
+		linePos := te.getLinePosFromTextIndex(startIndex)
+		te.MoveCursorTo(EDITOR_START_X, linePos)
+		runeSlice = append(runeSlice[:startIndex], runeSlice[endIndex:]...)
+		te.Text = string(runeSlice)
+		te.Draw()
+	} else if op.Operation == Insert {
+		textIndex := op.StartIndex
+		linePos := te.getLinePosFromTextIndex(textIndex)
+		te.MoveCursorTo(EDITOR_START_X, linePos)
+		runeSlice := []rune(te.Text)
+		runeSlice = append(runeSlice[:textIndex], append([]rune(op.Text), runeSlice[textIndex:]...)...)
+		te.Text = string(runeSlice)
+		te.Draw()
+	}
+}
