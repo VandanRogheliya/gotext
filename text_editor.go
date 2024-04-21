@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"math"
+	"strings"
 
 	"github.com/atotto/clipboard"
 	"github.com/nsf/termbox-go"
@@ -28,6 +29,7 @@ type TextEditor struct {
 	newLines            map[int]struct{}
 	Selection           selection
 	isSelection         bool
+	undoRedoTree        UndoRedoTree
 }
 
 func InitTextEditor(text string, fileName string) *TextEditor {
@@ -39,6 +41,7 @@ func InitTextEditor(text string, fileName string) *TextEditor {
 		FileName:            fileName,
 		scrollY:             EDITOR_START_Y,
 		isSelection:         false,
+		undoRedoTree:        *InitUndoRedoTree(),
 	}
 }
 
@@ -104,7 +107,6 @@ func (te *TextEditor) width(row int) int {
 func (te *TextEditor) getTextIndex(x, y int) int {
 	totalChars := 0
 	for i := 0; i < y; i++ {
-
 		totalChars += len(te.cellGrid[i]) - EDITOR_START_X
 		if _, ok := te.newLines[i]; ok {
 			totalChars++
@@ -138,7 +140,6 @@ func (te *TextEditor) getVisibleCellGrid() [][]rune {
 	lastVisibleRow := te.scrollY + te.getMaxVisibleContentHeight()
 	lastVisibleRow = int(math.Min(float64(lastVisibleRow), float64(len(te.cellGrid))))
 	return te.cellGrid[firstVisibleRow:lastVisibleRow]
-
 }
 
 func (te *TextEditor) setCursorAndScroll() {
@@ -174,7 +175,7 @@ func (te *TextEditor) Draw() {
 
 	for _, c := range te.Text {
 		lastRowIndex := len(te.cellGrid) - 1
-		if c == '\n' || len(te.cellGrid[lastRowIndex]) >= w-1 {
+		if c == '\n' || len(te.cellGrid[lastRowIndex]) > w {
 			var row []rune
 			te.cellGrid = append(te.cellGrid, row)
 			if c == '\n' {
@@ -290,6 +291,48 @@ func (te *TextEditor) MoveCursorToBeginningOfTheLine() {
 	te.Draw()
 }
 
+func (te *TextEditor) getLinePosFromTextIndex(textIndex int) int {
+	w, _ := termbox.Size()
+	lines := strings.Split(te.Text, "\n")
+	editorLines := [][]string{}
+	for _, line := range lines {
+		if len(line) > w {
+			runeSlice := []rune(line)
+			newLineCnt := len(line) / w
+			startIndex := 0
+			endIndex := w
+			newLines := []string{}
+			for i := 0; i <= newLineCnt; i++ {
+				endIndex = int(math.Min(float64(endIndex), float64(len(runeSlice))))
+				newRuneSlice := runeSlice[startIndex:endIndex]
+				newLine := string(newRuneSlice)
+				newLines = append(newLines, newLine)
+				startIndex += w
+				endIndex += w
+			}
+			editorLines = append(editorLines, newLines)
+
+		} else {
+			editorLines = append(editorLines, []string{line})
+		}
+	}
+
+	y := EDITOR_START_Y - 1
+	charsCnt := 0
+	for _, lines := range editorLines {
+		for _, line := range lines {
+			y++
+			charsCnt += len(line)
+			if charsCnt >= textIndex {
+				return y
+			}
+		}
+		charsCnt++
+	}
+	height := te.height()
+	return height
+}
+
 func (te *TextEditor) InsertString(text string) {
 	if te.isSelection {
 		te.RemoveSelection()
@@ -306,6 +349,7 @@ func (te *TextEditor) InsertString(text string) {
 	} else {
 		te.MoveCursorRight()
 	}
+	te.undoRedoTree.AddNode(Insert, text, textIndex)
 }
 
 func (te *TextEditor) AddNewLine() {
@@ -328,6 +372,7 @@ func (te *TextEditor) RemoveChar() {
 		return
 	}
 	textIndex := te.getTextIndex(te.CursorXOffset, te.CursorYOffset) - 1
+	removedChar := te.Text[textIndex]
 	runeSlice := []rune(te.Text)
 	runeSlice = append(runeSlice[:textIndex], runeSlice[textIndex+1:]...)
 	if te.CursorXOffset == EDITOR_START_X {
@@ -341,6 +386,23 @@ func (te *TextEditor) RemoveChar() {
 	}
 	te.Text = string(runeSlice)
 	te.Draw()
+	te.undoRedoTree.AddNode(Remove, string(removedChar), textIndex)
+}
+
+func (te *TextEditor) RemoveSelection() {
+	if !te.isSelection {
+		return
+	}
+	startIndex, endIndex := te.getSelectedTextIndexRange()
+	selectedText := te.Text[startIndex:endIndex]
+	runeSlice := []rune(te.Text)
+	runeSlice = append(runeSlice[:startIndex], runeSlice[endIndex:]...)
+	startX, startY, _, _ := te.getSelectionRange()
+	te.MoveCursorTo(startX, startY)
+	te.Text = string(runeSlice)
+	te.ToggleSelectionMode()
+	te.Draw()
+	te.undoRedoTree.AddNode(Remove, selectedText, startIndex)
 }
 
 func (te *TextEditor) ToggleSelectionMode() {
@@ -363,20 +425,6 @@ func (te *TextEditor) CopySelection() {
 	}
 }
 
-func (te *TextEditor) RemoveSelection() {
-	if !te.isSelection {
-		return
-	}
-	startIndex, endIndex := te.getSelectedTextIndexRange()
-	runeSlice := []rune(te.Text)
-	runeSlice = append(runeSlice[:startIndex], runeSlice[endIndex:]...)
-	startX, startY, _, _ := te.getSelectionRange()
-	te.MoveCursorTo(startX, startY)
-	te.Text = string(runeSlice)
-	te.ToggleSelectionMode()
-	te.Draw()
-}
-
 func (te *TextEditor) CutSelection() {
 	if !te.isSelection {
 		return
@@ -395,4 +443,29 @@ func (te *TextEditor) Paste() {
 		log.Fatalf(err.Error())
 	}
 	te.InsertString(text)
+}
+
+func (te *TextEditor) Undo() {
+	op := te.undoRedoTree.Undo()
+	if op == nil {
+		return
+	}
+	if op.Operation == Insert {
+		runeSlice := []rune(te.Text)
+		startIndex := op.StartIndex
+		endIndex := startIndex + len(op.Text)
+		linePos := te.getLinePosFromTextIndex(startIndex)
+		te.MoveCursorTo(EDITOR_START_X, linePos)
+		runeSlice = append(runeSlice[:startIndex], runeSlice[endIndex:]...)
+		te.Text = string(runeSlice)
+		te.Draw()
+	} else if op.Operation == Remove {
+		textIndex := op.StartIndex
+		linePos := te.getLinePosFromTextIndex(textIndex)
+		te.MoveCursorTo(EDITOR_START_X, linePos)
+		runeSlice := []rune(te.Text)
+		runeSlice = append(runeSlice[:textIndex], append([]rune(op.Text), runeSlice[textIndex:]...)...)
+		te.Text = string(runeSlice)
+		te.Draw()
+	}
 }

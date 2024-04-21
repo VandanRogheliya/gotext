@@ -56,6 +56,8 @@ mainLoop:
 				textEditor.CutSelection()
 			case termbox.KeyCtrlV:
 				textEditor.Paste()
+			case termbox.KeyCtrlZ:
+				textEditor.Undo()
 			case termbox.KeySpace:
 				textEditor.InsertString(" ")
 			case termbox.KeyEnter:
