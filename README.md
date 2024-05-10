@@ -1,6 +1,6 @@
 # Text Editor in Go
 
-> This is a simple text editor written in Go. It provides a basic set of features that you would expect from a text editor.
+> Simple text editor written in Go. It provides a basic set of features that you would expect from a text editor.
 
 ## Features
 
