@@ -2,6 +2,8 @@
 
 > Simple text editor written in Go. It provides a basic set of features that you would expect from a text editor.
 
+![demo](https://github.com/VandanRogheliya/gotext/blob/main/gotext-readme.gif)
+
 ## Features
 
 - Undo and Redo
